@@ -32,24 +32,29 @@ jobs:
 
       - name: Build Release
         run: |
-          mkdir -p output
           xcodebuild -scheme airsync-mac \
             -configuration Release \
             -sdk macosx \
             -destination "platform=macOS" \
             DEVELOPMENT_TEAM="" \
             CODE_SIGNING_ALLOWED=NO \
-            CONFIGURATION_BUILD_DIR="$PWD/output" \
             SUPPORTED_PLATFORMS=macosx \
             SUPPORTS_MACCATALYST=NO \
             build 2>&1 | tail -5
-          ls -la output/
+          echo "=== Build complete, listing DerivedData ==="
+          find ~/Library/Developer/Xcode/DerivedData -maxdepth 1 -type d -name "airsync*" 2>/dev/null
+          DERIVED=$(find ~/Library/Developer/Xcode/DerivedData -maxdepth 1 -type d -name "airsync*" | head -1)
+          echo "DerivedData project dir: $DERIVED"
+          find "$DERIVED" -name "*.app" -type d 2>/dev/null
 
       - name: Package DMG
         run: |
-          test -d "output/AirSync.app" || { echo "FAIL: AirSync.app not in output/"; ls -la output/; exit 1; }
+          DERIVED=$(find ~/Library/Developer/Xcode/DerivedData -maxdepth 1 -type d -name "airsync*" | head -1)
+          APP=$(find "$DERIVED" -name "AirSync.app" -type d | head -1)
+          echo "APP=$APP"
+          test -d "$APP" || { echo "FAIL"; exit 1; }
           mkdir -p dmg-staging
-          cp -R output/AirSync.app dmg-staging/
+          cp -R "$APP" dmg-staging/
           ln -s /Applications dmg-staging/Applications
           hdiutil create -volname "AirSync" -srcfolder dmg-staging -ov -format UDZO -fs HFS+ AirSync.dmg
           ls -lh AirSync.dmg
