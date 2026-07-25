@@ -30,49 +30,41 @@ jobs:
           TRIAL_SECRET = CI_BUILD_PLACEHOLDER
           XCEOF
 
+      - name: Build Debug (validates scheme)
+        run: |
+          xcodebuild -scheme airsync-mac -configuration Debug \
+            -sdk macosx -destination "platform=macOS" \
+            DEVELOPMENT_TEAM="" CODE_SIGNING_ALLOWED=NO clean build 2>&1 | tail -3
+
       - name: Build Release
         run: |
-          xcodebuild -scheme airsync-mac \
-            -configuration Release \
-            -derivedDataPath "$PWD/DerivedData" \
-            -sdk macosx \
-            -destination "platform=macOS" \
-            DEVELOPMENT_TEAM="" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGN_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            SUPPORTED_PLATFORMS=macosx \
-            SUPPORTS_MACCATALYST=NO \
-            build 2>&1 | tail -5
+          xcodebuild -scheme airsync-mac -configuration Release \
+            -sdk macosx -destination "platform=macOS" \
+            DEVELOPMENT_TEAM="" CODE_SIGNING_ALLOWED=NO clean build 2>&1 | tail -3
 
       - name: Package DMG
         run: |
-          set -euo pipefail
-
-          echo "=== Searching for .app ==="
-          find "$PWD/DerivedData" -name "AirSync.app" -type d
-          find "$PWD/DerivedData" -name "*.app" -type d
-
-          APP_PATH=$(find "$PWD/DerivedData" -name "AirSync.app" -type d | head -1)
-
-          if [ -z "$APP_PATH" ]; then
-            echo "Not in DerivedData, trying system path..."
-            find ~/Library/Developer/Xcode/DerivedData -name "AirSync.app" -type d 2>/dev/null | head -5
-            APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "AirSync.app" -type d 2>/dev/null | head -1)
+          # Try BUILT_PRODUCTS_DIR first
+          BPD=$(xcodebuild -scheme airsync-mac -configuration Release -showBuildSettings 2>/dev/null | awk '/ BUILT_PRODUCTS_DIR =/{print $3}')
+          APP="$BPD/AirSync.app"
+          echo "BUILT_PRODUCTS_DIR=$BPD"
+          if [ ! -d "$APP" ]; then
+            echo "Trying BUILD_DIR..."
+            BD=$(xcodebuild -scheme airsync-mac -configuration Release -showBuildSettings 2>/dev/null | awk '/ BUILD_DIR =/{print $3}')
+            APP="$BD/Release/AirSync.app"
+            echo "BUILD_DIR=$BD"
           fi
-
-          echo "APP_PATH=$APP_PATH"
-          test -n "$APP_PATH" || { echo "ERROR: .app not found"; exit 1; }
-
-          echo "=== Creating DMG ==="
+          if [ ! -d "$APP" ]; then
+            echo "Full search..."
+            find ~/Library/Developer/Xcode/DerivedData -name "AirSync.app" -type d 2>/dev/null | head -3
+            APP=$(find ~/Library/Developer/Xcode/DerivedData -name "AirSync.app" -type d 2>/dev/null | head -1)
+          fi
+          echo "APP=$APP"
+          test -d "$APP" || { echo "FAIL: cannot find AirSync.app"; exit 1; }
           mkdir -p dmg-staging
-          cp -R "$APP_PATH" dmg-staging/
+          cp -R "$APP" dmg-staging/
           ln -s /Applications dmg-staging/Applications
-          hdiutil create -volname "AirSync" \
-            -srcfolder dmg-staging \
-            -ov -format UDZO \
-            -fs HFS+ \
-            AirSync.dmg
+          hdiutil create -volname "AirSync" -srcfolder dmg-staging -ov -format UDZO -fs HFS+ AirSync.dmg
           ls -lh AirSync.dmg
 
       - name: Upload DMG artifact
