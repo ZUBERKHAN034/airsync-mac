@@ -34,7 +34,6 @@ jobs:
         run: |
           xcodebuild -scheme airsync-mac \
             -configuration Release \
-            -derivedDataPath DerivedData \
             -sdk macosx \
             -destination "platform=macOS" \
             DEVELOPMENT_TEAM="" \
@@ -43,21 +42,29 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             SUPPORTED_PLATFORMS=macosx \
             SUPPORTS_MACCATALYST=NO \
-            build 2>&1 | tail -50
+            build 2>&1 | tail -5
+
+      - name: Get build path
+        run: |
+          BUILD_DIR=$(xcodebuild -scheme airsync-mac -configuration Release -showBuildSettings 2>/dev/null | grep -m1 " BUILD_DIR" | awk '{print $3}')
+          echo "BUILD_DIR=$BUILD_DIR"
+          echo "build_dir=$BUILD_DIR" >> $GITHUB_OUTPUT
+          find "$BUILD_DIR" -name "AirSync.app" -type d || echo "Not in BUILD_DIR directly"
+          find /Users/runner/Library/Developer/Xcode/DerivedData -name "AirSync.app" -type d -maxdepth 1 2>/dev/null || true
+          find /Users/runner/Library/Developer/Xcode/DerivedData -name "AirSync.app" -type d 2>/dev/null || true
 
       - name: Prepare app bundle
         run: |
-          set -x
-          APP_PATH="$(find DerivedData /Users/runner/Library/Developer/Xcode/DerivedData -type d -name "AirSync.app" 2>/dev/null | head -1)"
+          BUILD_DIR="${{ steps.build.outputs.build_dir }}"
+          APP_PATH=$(find "$BUILD_DIR" -name "AirSync.app" -type d 2>/dev/null | head -1)
           if [ -z "$APP_PATH" ]; then
-            echo "Listing all .app in DerivedData:"
-            find DerivedData -type d -name "*.app" 2>/dev/null || true
-            echo "Listing all .app in system DerivedData:"
-            find /Users/runner/Library/Developer/Xcode/DerivedData -type d -name "*.app" 2>/dev/null || true
+            APP_PATH=$(find /Users/runner/Library/Developer/Xcode/DerivedData -name "AirSync.app" -type d 2>/dev/null | head -1)
+          fi
+          echo "App path: $APP_PATH"
+          if [ -z "$APP_PATH" ]; then
             echo "ERROR: Could not find AirSync.app"
             exit 1
           fi
-          echo "Found: $APP_PATH"
           cp -R "$APP_PATH" AirSync.app
 
       - name: Create DMG
