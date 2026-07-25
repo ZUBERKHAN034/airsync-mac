@@ -27,32 +27,18 @@ jobs:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited)
           XCEOF
 
-      - name: Build Self Compiled
+      - name: Archive
         run: |
-          xcodebuild -scheme "AirSync Self Compiled" \
-            -configuration "Self Compiled" \
-            -derivedDataPath DerivedData \
+          xcodebuild -scheme airsync-mac \
+            -configuration Release \
+            -archivePath build/AirSync.xcarchive \
             CODE_SIGNING_ALLOWED=NO \
-            clean build
+            archive
 
-      - name: Locate .app
-        run: |
-          find DerivedData -type d -name "*.app" 2>/dev/null || echo "(none)"
-
-      - name: Prepare app bundle
-        run: |
-          APP_PATH="$(find DerivedData -type d -name "AirSync.app" | head -1)"
-          if [ -z "$APP_PATH" ]; then
-            echo "ERROR: Could not find .app"
-            exit 1
-          fi
-          echo "App path: $APP_PATH"
-          cp -R "$APP_PATH" AirSync.app
-
-      - name: Create DMG
+      - name: Prepare DMG
         run: |
           mkdir -p dmg-staging
-          cp -R AirSync.app dmg-staging/
+          cp -R build/AirSync.xcarchive/Products/Applications/AirSync.app dmg-staging/
           ln -s /Applications dmg-staging/Applications
           hdiutil create -volname "AirSync" \
             -srcfolder dmg-staging \
