@@ -30,8 +30,11 @@ jobs:
           TRIAL_SECRET = CI_BUILD_PLACEHOLDER
           XCEOF
 
-      - name: Build Release
+      - name: Build and Package DMG
         run: |
+          set -euo pipefail
+
+          echo "=== Building ==="
           xcodebuild -scheme airsync-mac \
             -configuration Release \
             -sdk macosx \
@@ -44,21 +47,26 @@ jobs:
             SUPPORTS_MACCATALYST=NO \
             build 2>&1 | tail -5
 
-      - name: Prepare DMG
-        run: |
+          echo "=== Finding .app ==="
           BUILT_DIR=$(xcodebuild -scheme airsync-mac -configuration Release -showBuildSettings 2>/dev/null | grep " BUILT_PRODUCTS_DIR " | head -1 | awk '{print $3}')
           echo "BUILT_PRODUCTS_DIR=$BUILT_DIR"
 
           APP_PATH="$BUILT_DIR/AirSync.app"
           if [ ! -d "$APP_PATH" ]; then
-            echo "Not found, searching..."
-            find /Users/runner/Library/Developer/Xcode/DerivedData -name "AirSync.app" -maxdepth 4 -type d 2>/dev/null
-            APP_PATH="$(find /Users/runner/Library/Developer/Xcode/DerivedData -name "AirSync.app" -maxdepth 4 -type d 2>/dev/null | head -1)"
+            APP_PATH=$(find /Users/runner/Library/Developer/Xcode/DerivedData -maxdepth 5 -name "AirSync.app" -type d 2>/dev/null | head -1)
+          fi
+          if [ ! -d "$APP_PATH" ]; then
+            APP_PATH=$(find /var/folders -name "AirSync.app" -maxdepth 10 -type d 2>/dev/null | head -1)
+          fi
+          echo "Final APP_PATH=$APP_PATH"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "Searching everywhere..."
+            find /Users/runner/Library/Developer -name "AirSync.app" -maxdepth 10 -type d 2>/dev/null | head -5
+            echo "ERROR: Cannot find AirSync.app"
+            exit 1
           fi
 
-          echo "App path: $APP_PATH"
-          ls "$APP_PATH" || { echo "ERROR: .app not found"; exit 1; }
-
+          echo "=== Creating DMG ==="
           mkdir -p dmg-staging
           cp -R "$APP_PATH" dmg-staging/
           ln -s /Applications dmg-staging/Applications
@@ -67,6 +75,9 @@ jobs:
             -ov -format UDZO \
             -fs HFS+ \
             AirSync.dmg
+
+          echo "=== DMG created ==="
+          ls -lh AirSync.dmg
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
