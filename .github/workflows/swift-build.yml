@@ -21,24 +21,55 @@ jobs:
         with:
           xcode-version: latest
 
-      - name: Create Shared.xcconfig
+      - name: Create required xcconfig files
         run: |
           cat > airsync-mac/Configs/Shared.xcconfig << 'XCEOF'
           SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited)
           XCEOF
 
-      - name: Archive
+          cat > airsync-mac/Configs/Secrets.xcconfig << 'XCEOF'
+          TRIAL_SECRET = CI_BUILD_PLACEHOLDER
+          XCEOF
+
+      - name: Resolve packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -scheme airsync-mac \
+            -derivedDataPath DerivedData
+
+      - name: Build Release
         run: |
           xcodebuild -scheme airsync-mac \
             -configuration Release \
-            -archivePath build/AirSync.xcarchive \
+            -derivedDataPath DerivedData \
+            -sdk macosx \
+            -destination "platform=macOS" \
+            SUPPORTED_PLATFORMS=macosx \
+            SUPPORTS_MACCATALYST=NO \
+            MACOSX_DEPLOYMENT_TARGET=14.5 \
+            DEVELOPMENT_TEAM="" \
             CODE_SIGNING_ALLOWED=NO \
-            archive
+            CODE_SIGN_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tail -40
 
-      - name: Prepare DMG
+      - name: Prepare app bundle
+        run: |
+          APP_PATH="$(find DerivedData -type d -name "AirSync.app" | head -1)"
+          if [ -z "$APP_PATH" ]; then
+            APP_PATH="$(find /Users/runner/Library/Developer/Xcode/DerivedData -type d -name "AirSync.app" | head -1)"
+          fi
+          echo "App path: $APP_PATH"
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: Could not find AirSync.app"
+            exit 1
+          fi
+          cp -R "$APP_PATH" AirSync.app
+
+      - name: Create DMG
         run: |
           mkdir -p dmg-staging
-          cp -R build/AirSync.xcarchive/Products/Applications/AirSync.app dmg-staging/
+          cp -R AirSync.app dmg-staging/
           ln -s /Applications dmg-staging/Applications
           hdiutil create -volname "AirSync" \
             -srcfolder dmg-staging \
