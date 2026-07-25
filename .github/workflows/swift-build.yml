@@ -1,55 +1,61 @@
-name: Swift Build and Debug Release
+name: Build, Package & Release
 
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [main]
+    tags: ['v*']
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   build:
     runs-on: macos-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Xcode
-      uses: maxim-lobanov/setup-xcode@v1
-      with:
-        xcode-version: latest
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest
 
-    - name: Build Debug
-      run: |
-        xcodebuild -scheme airsync-mac -configuration Debug clean build | xcpretty
+      - name: Build Release
+        run: |
+          xcodebuild -scheme airsync-mac \
+            -configuration Release \
+            -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            clean build | xcpretty
 
-    - name: Build Release
-      run: |
-        xcodebuild -scheme airsync-mac -configuration Release clean build | xcpretty
+      - name: Prepare app bundle
+        run: |
+          APP_PATH="$(find DerivedData/Build/Products/Release -name '*.app' -maxdepth 1 | head -1)"
+          echo "Found app at: $APP_PATH"
+          cp -R "$APP_PATH" AirSync.app
 
-    - name: Archive Debug Build Artifacts
-      if: success()
-      run: |
-        mkdir -p build-artifacts/Debug
-        cp -R "$(xcodebuild -scheme airsync-mac -configuration Debug -showBuildSettings | grep -m 1 BUILD_DIR | awk '{print $3}')/Debug/"* build-artifacts/Debug/
-      shell: bash
+      - name: Create DMG
+        run: |
+          mkdir -p dmg-staging
+          cp -R AirSync.app dmg-staging/
+          ln -s /Applications dmg-staging/Applications
 
-    - name: Archive Release Build Artifacts
-      if: success()
-      run: |
-        mkdir -p build-artifacts/Release
-        cp -R "$(xcodebuild -scheme airsync-mac -configuration Release -showBuildSettings | grep -m 1 BUILD_DIR | awk '{print $3}')/Release/"* build-artifacts/Release/
-      shell: bash
+          hdiutil create -volname "AirSync" \
+            -srcfolder dmg-staging \
+            -ov -format UDZO \
+            -fs HFS+ \
+            AirSync.dmg
 
-    - name: Upload Debug Build Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: AirSync-Debug
-        path: build-artifacts/Debug
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AirSync.dmg
+          path: AirSync.dmg
 
-    - name: Upload Release Build Artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: AirSync-Release
-        path: build-artifacts/Release
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: AirSync.dmg
+          generate_release_notes: true
