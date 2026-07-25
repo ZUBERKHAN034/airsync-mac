@@ -44,38 +44,23 @@ jobs:
             SUPPORTS_MACCATALYST=NO \
             build 2>&1 | tail -5
 
-      - name: Get config build dir
-        id: cfg
+      - name: Prepare DMG
         run: |
-          CFG_DIR=$(xcodebuild -scheme airsync-mac -configuration Release -showBuildSettings 2>/dev/null | grep " CONFIGURATION_BUILD_DIR" | head -1 | awk '{print $3}')
-          echo "CONFIGURATION_BUILD_DIR=$CFG_DIR"
-          ls "$CFG_DIR" || echo "Can't list cfg dir"
-          echo "cfg_dir=$CFG_DIR" >> $GITHUB_OUTPUT
+          BUILT_DIR=$(xcodebuild -scheme airsync-mac -configuration Release -showBuildSettings 2>/dev/null | grep " BUILT_PRODUCTS_DIR " | head -1 | awk '{print $3}')
+          echo "BUILT_PRODUCTS_DIR=$BUILT_DIR"
 
-      - name: Prepare app bundle
-        run: |
-          CFG_DIR="${{ steps.cfg.outputs.cfg_dir }}"
-          find "$CFG_DIR" -maxdepth 1 -name "*.app" -type d || true
-          APP_PATH="$CFG_DIR/AirSync.app"
-          if [ -d "$APP_PATH" ]; then
-            echo "Found at: $APP_PATH"
-            cp -R "$APP_PATH" AirSync.app
-          else
-            echo "Not at expected path, searching..."
-            APP_PATH="$(find /Users/runner/Library/Developer/Xcode/DerivedData -maxdepth 3 -name "AirSync.app" -type d 2>/dev/null | head -1)"
-            if [ -z "$APP_PATH" ]; then
-              echo "ERROR: Could not find AirSync.app"
-              find /Users/runner/Library/Developer/Xcode/DerivedData -name "AirSync.app" -type d 2>/dev/null || true
-              exit 1
-            fi
-            echo "Found via search: $APP_PATH"
-            cp -R "$APP_PATH" AirSync.app
+          APP_PATH="$BUILT_DIR/AirSync.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "Not found, searching..."
+            find /Users/runner/Library/Developer/Xcode/DerivedData -name "AirSync.app" -maxdepth 4 -type d 2>/dev/null
+            APP_PATH="$(find /Users/runner/Library/Developer/Xcode/DerivedData -name "AirSync.app" -maxdepth 4 -type d 2>/dev/null | head -1)"
           fi
 
-      - name: Create DMG
-        run: |
+          echo "App path: $APP_PATH"
+          ls "$APP_PATH" || { echo "ERROR: .app not found"; exit 1; }
+
           mkdir -p dmg-staging
-          cp -R AirSync.app dmg-staging/
+          cp -R "$APP_PATH" dmg-staging/
           ln -s /Applications dmg-staging/Applications
           hdiutil create -volname "AirSync" \
             -srcfolder dmg-staging \
