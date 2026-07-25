@@ -27,12 +27,26 @@ jobs:
             -configuration Release \
             -derivedDataPath DerivedData \
             CODE_SIGNING_ALLOWED=NO \
-            clean build | xcpretty
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            clean build
 
       - name: Prepare app bundle
         run: |
-          APP_PATH="$(find DerivedData/Build/Products/Release -name '*.app' -maxdepth 1 | head -1)"
-          echo "Found app at: $APP_PATH"
+          set -x
+          echo "=== Listing DerivedData ==="
+          find DerivedData/Build/Products -name "*.app" -type d 2>/dev/null || true
+          echo "=== Full find ==="
+          find DerivedData -name "*.app" -type d 2>/dev/null || true
+          APP_PATH="$(find DerivedData -name "AirSync.app" -type d | head -1)"
+          if [ -z "$APP_PATH" ]; then
+            APP_PATH="$(find DerivedData -name "*.app" -type d | head -1)"
+          fi
+          echo "App path: $APP_PATH"
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: Could not find .app bundle"
+            exit 1
+          fi
           cp -R "$APP_PATH" AirSync.app
 
       - name: Create DMG
