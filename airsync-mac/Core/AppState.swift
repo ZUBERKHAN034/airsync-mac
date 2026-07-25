@@ -159,17 +159,15 @@ class AppState: ObservableObject {
             startClipboardMonitoring()
         }
 
-        #if SELF_COMPILED
+        // #if SELF_COMPILED
         self.isPlus = true
         UserDefaults.standard.set(true, forKey: "isPlus")
         UserDefaults.standard.lastLicenseSuccessfulCheckDate = Date().addingTimeInterval(-(24 * 60 * 60))
-        #else
-        Task {
-            // Delay startup check by 5 minutes (300 seconds) to ensure network connection is fully established
-            try? await Task.sleep(nanoseconds: 300_000_000_000)
-            await Gumroad().checkLicenseIfNeeded()
-        }
-        #endif
+        // #else
+        // Task {
+        //     await Gumroad().checkLicenseIfNeeded()
+        // }
+        // #endif
 
         if !self.isPlus && licenseCheck {
             self.showMenubarAlbumArt = false
