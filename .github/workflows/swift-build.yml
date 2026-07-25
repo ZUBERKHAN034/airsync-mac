@@ -30,13 +30,11 @@ jobs:
           TRIAL_SECRET = CI_BUILD_PLACEHOLDER
           XCEOF
 
-      - name: Build and Package DMG
+      - name: Build Release
         run: |
-          set -euo pipefail
-
-          echo "=== Building ==="
           xcodebuild -scheme airsync-mac \
             -configuration Release \
+            -derivedDataPath "$PWD/DerivedData" \
             -sdk macosx \
             -destination "platform=macOS" \
             DEVELOPMENT_TEAM="" \
@@ -47,24 +45,24 @@ jobs:
             SUPPORTS_MACCATALYST=NO \
             build 2>&1 | tail -5
 
-          echo "=== Finding .app ==="
-          BUILT_DIR=$(xcodebuild -scheme airsync-mac -configuration Release -showBuildSettings 2>/dev/null | grep " BUILT_PRODUCTS_DIR " | head -1 | awk '{print $3}')
-          echo "BUILT_PRODUCTS_DIR=$BUILT_DIR"
+      - name: Package DMG
+        run: |
+          set -euo pipefail
 
-          APP_PATH="$BUILT_DIR/AirSync.app"
-          if [ ! -d "$APP_PATH" ]; then
-            APP_PATH=$(find /Users/runner/Library/Developer/Xcode/DerivedData -maxdepth 5 -name "AirSync.app" -type d 2>/dev/null | head -1)
+          echo "=== Searching for .app ==="
+          find "$PWD/DerivedData" -name "AirSync.app" -type d
+          find "$PWD/DerivedData" -name "*.app" -type d
+
+          APP_PATH=$(find "$PWD/DerivedData" -name "AirSync.app" -type d | head -1)
+
+          if [ -z "$APP_PATH" ]; then
+            echo "Not in DerivedData, trying system path..."
+            find ~/Library/Developer/Xcode/DerivedData -name "AirSync.app" -type d 2>/dev/null | head -5
+            APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "AirSync.app" -type d 2>/dev/null | head -1)
           fi
-          if [ ! -d "$APP_PATH" ]; then
-            APP_PATH=$(find /var/folders -name "AirSync.app" -maxdepth 10 -type d 2>/dev/null | head -1)
-          fi
-          echo "Final APP_PATH=$APP_PATH"
-          if [ ! -d "$APP_PATH" ]; then
-            echo "Searching everywhere..."
-            find /Users/runner/Library/Developer -name "AirSync.app" -maxdepth 10 -type d 2>/dev/null | head -5
-            echo "ERROR: Cannot find AirSync.app"
-            exit 1
-          fi
+
+          echo "APP_PATH=$APP_PATH"
+          test -n "$APP_PATH" || { echo "ERROR: .app not found"; exit 1; }
 
           echo "=== Creating DMG ==="
           mkdir -p dmg-staging
@@ -75,8 +73,6 @@ jobs:
             -ov -format UDZO \
             -fs HFS+ \
             AirSync.dmg
-
-          echo "=== DMG created ==="
           ls -lh AirSync.dmg
 
       - name: Upload DMG artifact
