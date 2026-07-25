@@ -21,15 +21,14 @@ jobs:
         with:
           xcode-version: latest
 
-      - name: Create missing config files
+      - name: Create missing xcconfig
         run: |
           cat > airsync-mac/Configs/Shared.xcconfig << 'XCEOF'
-          SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) SELF_COMPILED
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS = SELF_COMPILED
           PRODUCT_BUNDLE_IDENTIFIER = com.sameerasw.airsync-mac
           MARKETING_VERSION = 4.0.1
           CURRENT_PROJECT_VERSION = 30
           XCEOF
-
           cat > airsync-mac/Configs/Secrets.xcconfig << 'XCEOF'
           TRIAL_SECRET = CI_BUILD
           XCEOF
@@ -42,15 +41,19 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            clean build
+            build
 
       - name: Prepare app bundle
         run: |
+          set -x
+          find DerivedData -name "*.app" -type d
           APP_PATH="$(find DerivedData -name "AirSync.app" -type d | head -1)"
+          if [ -z "$APP_PATH" ]; then
+            APP_PATH="$(find DerivedData -name "*.app" -type d | head -1)"
+          fi
           echo "App path: $APP_PATH"
           if [ -z "$APP_PATH" ]; then
             echo "ERROR: Could not find .app bundle"
-            find DerivedData -name "*.app" -type d || true
             exit 1
           fi
           cp -R "$APP_PATH" AirSync.app
