@@ -21,9 +21,15 @@ jobs:
         with:
           xcode-version: latest
 
+      - name: Create Shared.xcconfig
+        run: |
+          cat > airsync-mac/Configs/Shared.xcconfig << 'XCEOF'
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited)
+          XCEOF
+
       - name: Build Self Compiled
         run: |
-          xcodebuild -scheme AirSync \
+          xcodebuild -scheme "AirSync Self Compiled" \
             -configuration "Self Compiled" \
             -derivedDataPath DerivedData \
             CODE_SIGNING_ALLOWED=NO \
@@ -36,11 +42,11 @@ jobs:
       - name: Prepare app bundle
         run: |
           APP_PATH="$(find DerivedData -type d -name "AirSync.app" | head -1)"
-          echo "App path: '$APP_PATH'"
           if [ -z "$APP_PATH" ]; then
-            echo "ERROR: Could not find .app bundle"
+            echo "ERROR: Could not find .app"
             exit 1
           fi
+          echo "App path: $APP_PATH"
           cp -R "$APP_PATH" AirSync.app
 
       - name: Create DMG
