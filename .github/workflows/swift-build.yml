@@ -30,27 +30,27 @@ jobs:
           TRIAL_SECRET = CI_BUILD_PLACEHOLDER
           XCEOF
 
-      - name: Archive Release
+      - name: Build Release
         run: |
           xcodebuild -scheme airsync-mac \
             -configuration Release \
-            -archivePath "$PWD/build/AirSync.xcarchive" \
+            -sdk macosx \
             -destination "platform=macOS" \
             DEVELOPMENT_TEAM="" \
             CODE_SIGNING_ALLOWED=NO \
-            archive
-
-      - name: Verify archive
-        run: |
-          echo "=== Archive contents ==="
-          ls -la "$PWD/build/AirSync.xcarchive/"
-          ls -la "$PWD/build/AirSync.xcarchive/Products/"
-          ls -la "$PWD/build/AirSync.xcarchive/Products/Applications/"
-          test -d "$PWD/build/AirSync.xcarchive/Products/Applications/AirSync.app" || { echo "FAIL: AirSync.app missing"; exit 1; }
+            build 2>&1 | tail -5
 
       - name: Package DMG
         run: |
-          APP="$PWD/build/AirSync.xcarchive/Products/Applications/AirSync.app"
+          BUILD_DIR=$(xcodebuild -scheme airsync-mac -configuration Release -showBuildSettings | grep ' BUILD_DIR =' | head -1 | awk '{print $3}')
+          echo "BUILD_DIR=$BUILD_DIR"
+          echo "Contents:"
+          ls "$BUILD_DIR" || echo "cannot list BUILD_DIR"
+          ls "$BUILD_DIR/Release/" 2>/dev/null || echo "no Release subdir"
+          APP="$BUILD_DIR/Release/AirSync.app"
+          test -d "$APP" || APP="$(find ~/Library/Developer/Xcode/DerivedData -name 'AirSync.app' -type d | head -1)"
+          test -d "$APP" || { echo "FAIL"; exit 1; }
+          echo "APP=$APP"
           mkdir -p dmg-staging
           cp -R "$APP" dmg-staging/
           ln -s /Applications dmg-staging/Applications
