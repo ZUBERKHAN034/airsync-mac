@@ -20,26 +20,14 @@ jobs:
 
       - name: Create required xcconfig files
         run: |
-          cat > airsync-mac/Configs/Shared.xcconfig << 'XCEOF'
-          SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited)
-          XCEOF
-          cat > airsync-mac/Configs/Secrets.xcconfig << 'XCEOF'
-          TRIAL_SECRET = CI_BUILD_PLACEHOLDER
-          XCEOF
+          mkdir -p airsync-mac/Configs
+          echo 'SWIFT_ACTIVE_COMPILATION_CONDITIONS = $$(inherited)' > airsync-mac/Configs/Shared.xcconfig
+          echo 'TRIAL_SECRET = CI_BUILD_PLACEHOLDER' > airsync-mac/Configs/Secrets.xcconfig
 
       - name: Build
         run: |
-          # Xcode 26 actool crashes on multi-layer AppIcon.icon — remove from pbxproj
           sed -i '' '/AppIcon.icon/d' AirSync.xcodeproj/project.pbxproj
-
-          xcodebuild build \
-            -scheme AirSync \
-            -destination 'platform=macOS' \
-            -configuration Release \
-            -derivedDataPath DerivedData \
-            OTHER_SWIFT_FLAGS="-Xfrontend -enable-experimental-feature -Xfrontend IsolatedDeinit" \
-            CODE_SIGN_IDENTITY=- \
-            CODE_SIGNING_REQUIRED=NO
+          xcodebuild build -scheme AirSync -destination 'platform=macOS' -configuration Release -derivedDataPath DerivedData OTHER_SWIFT_FLAGS="-Xfrontend -enable-experimental-feature -Xfrontend IsolatedDeinit" CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO
 
       - name: Package
         run: |
