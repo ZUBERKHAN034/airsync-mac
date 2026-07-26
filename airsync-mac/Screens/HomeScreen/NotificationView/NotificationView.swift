@@ -6,7 +6,9 @@
 //
 
 import SwiftUI
+#if canImport(FoundationModels)
 import FoundationModels
+#endif
 
 struct NotificationView: View {
     @ObservedObject var appState = AppState.shared

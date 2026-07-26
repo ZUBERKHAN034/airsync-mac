@@ -6,7 +6,9 @@
 //
 
 import SwiftUI
+#if canImport(FoundationModels)
 import FoundationModels
+#endif
 import Combine
 
 struct SummaryLine: Identifiable {
