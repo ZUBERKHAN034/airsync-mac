@@ -1,39 +1,55 @@
-name: Release
+name: Build, Package & Release
 
 on:
-  push:
-    tags: ['v*.*.*']
   workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: write
 
 jobs:
   build:
-    name: Build Release
-    runs-on: macos-26
-    steps:
-      - uses: actions/checkout@v4
+    runs-on: macos-latest
 
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_26.6.app
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest
 
       - name: Create required xcconfig files
         run: |
-          mkdir -p airsync-mac/Configs
-          echo 'SWIFT_ACTIVE_COMPILATION_CONDITIONS = $$(inherited)' > airsync-mac/Configs/Shared.xcconfig
-          echo 'TRIAL_SECRET = CI_BUILD_PLACEHOLDER' > airsync-mac/Configs/Secrets.xcconfig
+          cat > airsync-mac/Configs/Shared.xcconfig << 'XCEOF'
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited)
+          XCEOF
+          cat > airsync-mac/Configs/Secrets.xcconfig << 'XCEOF'
+          TRIAL_SECRET = CI_BUILD_PLACEHOLDER
+          XCEOF
 
-      - name: Build
+      - name: Build Release
         run: |
-          sed -i '' '/AppIcon.icon/d' AirSync.xcodeproj/project.pbxproj
-          xcodebuild build -scheme AirSync -destination 'platform=macOS' -configuration Release -derivedDataPath DerivedData OTHER_SWIFT_FLAGS="-Xfrontend -enable-experimental-feature -Xfrontend IsolatedDeinit" CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO
+          xcodebuild -scheme AirSync \
+            -configuration Release \
+            -sdk macosx \
+            -destination "platform=macOS" \
+            DEVELOPMENT_TEAM="" \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tail -5
 
-      - name: Package
+      - name: Ad-hoc sign and Package DMG
         run: |
-          APP="DerivedData/Build/Products/Release/AirSync.app"
+          TARGET_DIR=$(xcodebuild -scheme AirSync -configuration Release -showBuildSettings 2>/dev/null | awk '/ TARGET_BUILD_DIR =/{print $3; exit}')
+          APP="$TARGET_DIR/AirSync.app"
           test -d "$APP" || { echo "FAIL: .app not found"; exit 1 }
 
+          # Ad-hoc sign to avoid "damaged" error
           codesign --force --deep --sign - "$APP" 2>/dev/null || echo "Signing skipped (non-fatal)"
 
           mkdir -p dmg-staging
@@ -42,14 +58,14 @@ jobs:
           hdiutil create -volname "AirSync" -srcfolder dmg-staging -ov -format UDZO -fs HFS+ AirSync.dmg
           ls -lh AirSync.dmg
 
-      - name: Upload artifact
+      - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AirSync
+          name: AirSync.dmg
           path: AirSync.dmg
 
-      - name: Create Release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: AirSync.dmg
