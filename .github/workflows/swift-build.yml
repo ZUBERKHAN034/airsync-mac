@@ -29,6 +29,16 @@ jobs:
 
       - name: Build
         run: |
+          # Xcode 26 actool crashes on multi-layer AppIcon; swap with minimal icon
+          cp AppIcon.icon/icon.json AppIcon.icon/icon.json.bak
+          cat > AppIcon.icon/icon.json << 'ICONEOF'
+          {
+            "features" : ["refractivity"],
+            "fill" : "automatic",
+            "supported-platforms" : { "squares" : "shared" }
+          }
+          ICONEOF
+
           xcodebuild build \
             -scheme AirSync \
             -destination 'platform=macOS' \
@@ -37,6 +47,8 @@ jobs:
             OTHER_SWIFT_FLAGS="-Xfrontend -enable-experimental-feature -Xfrontend IsolatedDeinit" \
             CODE_SIGN_IDENTITY=- \
             CODE_SIGNING_REQUIRED=NO
+
+          mv AppIcon.icon/icon.json.bak AppIcon.icon/icon.json
 
       - name: Package
         run: |
