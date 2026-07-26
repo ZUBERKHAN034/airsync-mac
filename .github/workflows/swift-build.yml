@@ -11,7 +11,7 @@ permissions:
 jobs:
   build:
     name: Build Release
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
 
@@ -34,6 +34,7 @@ jobs:
             -destination 'platform=macOS' \
             -configuration Release \
             -derivedDataPath DerivedData \
+            OTHER_SWIFT_FLAGS="-Xfrontend -enable-experimental-feature -Xfrontend IsolatedDeinit" \
             CODE_SIGN_IDENTITY=- \
             CODE_SIGNING_REQUIRED=NO
 
